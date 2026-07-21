@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SDL_RENDER_DRIVER="${SDL_RENDER_DRIVER:-software}"
+export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
+export SDL_VIDEO_X11_FORCE_EGL="${SDL_VIDEO_X11_FORCE_EGL:-0}"
+
+export MODE="${MODE:-demo}"
+export SOURCE="${SOURCE:-demo}"
+export SCENE_KM="${SCENE_KM:-3}"
+export INTERCEPT_MODE="${INTERCEPT_MODE:-hit}"
+export UI_STYLE="${UI_STYLE:-rect}"
+export FULLSCREEN="${FULLSCREEN:-0}"
+export HANGAR_MODE="${HANGAR_MODE:-multi}"
+
+export DEMO_INTERFERENCE_ENABLE="${DEMO_INTERFERENCE_ENABLE:-0}"
+export DEMO_INTERFERENCE_VISIBLE="${DEMO_INTERFERENCE_VISIBLE:-0}"
+export DEMO_SCHEME="${DEMO_SCHEME:-0}"   # 0=启动后右上角点1/2/3; 1=传统; 2=协同; 3=干扰失联
+export LLM_DASHBOARD="${LLM_DASHBOARD:-1}"
+export LLM_DASHBOARD_PORT="${LLM_DASHBOARD_PORT:-8765}"
+export LLM_DASHBOARD_OPEN="${LLM_DASHBOARD_OPEN:-1}"
+
+# 默认把敌我都写入本机Redis, 供老师按 1_x/1_y/1_z 和 100_x/100_y/100_z 读取。
+export ENABLE_PUBLISH_REDIS="${ENABLE_PUBLISH_REDIS:-1}"
+export PUBLISH_REDIS_MODE="${PUBLISH_REDIS_MODE:-teacher-friendly}"
+export PUBLISH_REDIS_SIDE="${PUBLISH_REDIS_SIDE:-all}"
+export PUBLISH_REDIS_HOST="${PUBLISH_REDIS_HOST:-127.0.0.1}"
+export PUBLISH_REDIS_PORT="${PUBLISH_REDIS_PORT:-6379}"
+export PUBLISH_REDIS_DB="${PUBLISH_REDIS_DB:-0}"
+export FRIENDLY_START="${FRIENDLY_START:-1}"
+export ENEMY_START="${ENEMY_START:-100}"
+export PUBLISH_INTERVAL="${PUBLISH_INTERVAL:-0.07}"
+
+# 纯本机demo不用读外部老师数据。
+export FRIENDLY_RETURN_SOURCE="${FRIENDLY_RETURN_SOURCE:-none}"
+
+cd "${SCRIPT_DIR}"
+exec bash ./run_fusion_custom.sh "$@"

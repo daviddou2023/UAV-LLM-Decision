@@ -1,0 +1,8 @@
+__pycache__
+*.py[cod]
+*.log
+*.tmp
+*.swp
+.idea/
+air_uav_export.csv
+friendly_uav_export.csv

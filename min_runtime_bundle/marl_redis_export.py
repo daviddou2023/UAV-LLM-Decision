@@ -1,0 +1,160 @@
+import subprocess
+
+from marl_common import EState, IState
+
+
+FRIENDLY_STATUS_MAP = {
+    IState.STANDBY: "standby",
+    IState.LAUNCHING: "launching",
+    IState.INTERCEPTING: "intercepting",
+    IState.FOLLOWING: "following",
+    IState.RETURNING: "returning",
+    IState.DESTROYED: "destroyed",
+    IState.LANDED: "landed",
+}
+
+LEGACY_KEY_PATTERNS = (
+    "friendly_*",
+    "enemy_*",
+    "*_id",
+    "total_frame",
+    "friendly_total",
+    "enemy_total",
+)
+
+TEACHER_STATUS_NORMAL = "normal"
+TEACHER_STATUS_UNNORMAL = "unnormal"
+TEACHER_TYPE_FRIENDLY = "ally"
+TEACHER_TYPE_ENEMY = "enemy"
+TEACHER_EXPORT_ALTITUDE_M = 50.0
+
+
+def friendly_status(entity):
+    return TEACHER_STATUS_UNNORMAL if entity["state"] == IState.DESTROYED else TEACHER_STATUS_NORMAL
+
+
+def enemy_status(entity):
+    return TEACHER_STATUS_UNNORMAL if entity["state"] == EState.DESTROYED else TEACHER_STATUS_NORMAL
+
+
+def friendly_rows(interceptors, friendly_start):
+    return [(friendly_start + idx, entity) for idx, entity in enumerate(interceptors)]
+
+
+def enemy_rows(enemies, enemy_start):
+    ordered = sorted(enemies, key=lambda entity: entity["id"])
+    return [(enemy_start + idx, entity) for idx, entity in enumerate(ordered)]
+
+
+def node_keys(node_num):
+    return {
+        f"{node_num}_x",
+        f"{node_num}_y",
+        f"{node_num}_z",
+        f"{node_num}_status",
+        f"{node_num}_type",
+        f"{node_num}_frame",
+        f"{node_num}_timestamp",
+        f"{node_num}_battery",
+    }
+
+
+def build_payload(friendly_rows_data, enemy_rows_data, frame_num, stamp):
+    payload = {}
+    active_nodes = set()
+
+    for node_num, entity in friendly_rows_data:
+        active_nodes.add(node_num)
+        payload[f"{node_num}_x"] = f"{entity['x']:.3f}"
+        payload[f"{node_num}_y"] = f"{TEACHER_EXPORT_ALTITUDE_M:.3f}"
+        payload[f"{node_num}_z"] = f"{entity['y']:.3f}"
+        payload[f"{node_num}_status"] = friendly_status(entity)
+        payload[f"{node_num}_type"] = TEACHER_TYPE_FRIENDLY
+        payload[f"{node_num}_frame"] = frame_num
+        payload[f"{node_num}_timestamp"] = f"{stamp:.6f}"
+        payload[f"{node_num}_battery"] = f"{max(0.0, entity.get('fuel', 0.0)):.2f}"
+
+    for node_num, entity in enemy_rows_data:
+        active_nodes.add(node_num)
+        payload[f"{node_num}_x"] = f"{entity['x']:.3f}"
+        payload[f"{node_num}_y"] = f"{TEACHER_EXPORT_ALTITUDE_M:.3f}"
+        payload[f"{node_num}_z"] = f"{entity['y']:.3f}"
+        payload[f"{node_num}_status"] = enemy_status(entity)
+        payload[f"{node_num}_type"] = TEACHER_TYPE_ENEMY
+        payload[f"{node_num}_frame"] = frame_num
+        payload[f"{node_num}_timestamp"] = f"{stamp:.6f}"
+
+    return payload, active_nodes
+
+
+def stale_keys(prev_nodes, active_nodes):
+    stale = []
+    for node_num in sorted(prev_nodes - active_nodes):
+        stale.extend(sorted(node_keys(node_num)))
+    return stale
+
+
+def planned_node_nums(interceptor_count, total_enemy_count, live_enemy_count, friendly_start, enemy_start):
+    friendly_nums = {
+        friendly_start + idx
+        for idx in range(interceptor_count)
+    }
+    projected_enemy_count = max(1, int(total_enemy_count or 0), int(live_enemy_count or 0))
+    enemy_nums = {
+        enemy_start + idx
+        for idx in range(projected_enemy_count)
+    }
+    return friendly_nums | enemy_nums
+
+
+class RedisNodeWriter:
+    def __init__(self, host="127.0.0.1", port=6379, db=0, timeout=1.2):
+        self.base_cmd = [
+            "redis-cli",
+            "-h", str(host),
+            "-p", str(port),
+            "-n", str(db),
+            "--raw",
+        ]
+        self.timeout = timeout
+
+    def _run(self, extra_args):
+        res = subprocess.run(
+            self.base_cmd + extra_args,
+            capture_output=True,
+            text=True,
+            timeout=self.timeout,
+            check=False,
+        )
+        if res.returncode != 0:
+            raise RuntimeError((res.stderr or res.stdout or "redis-cli command failed").strip())
+        return res.stdout
+
+    def mset(self, mapping):
+        if not mapping:
+            return
+        cmd = ["MSET"]
+        for key, value in mapping.items():
+            cmd.extend([str(key), str(value)])
+        self._run(cmd)
+
+    def delete(self, keys):
+        keys = [str(key) for key in keys if key]
+        if keys:
+            self._run(["DEL"] + keys)
+
+    def scan(self, pattern):
+        output = self._run(["--scan", "--pattern", str(pattern)])
+        return [line.strip() for line in output.splitlines() if line.strip()]
+
+    def cleanup_legacy_keys(self):
+        legacy = set()
+        for pattern in LEGACY_KEY_PATTERNS:
+            legacy.update(self.scan(pattern))
+        self.delete(sorted(legacy))
+
+    def cleanup_node_nums(self, node_nums):
+        keys = []
+        for node_num in sorted(node_nums):
+            keys.extend(sorted(node_keys(node_num)))
+        self.delete(keys)

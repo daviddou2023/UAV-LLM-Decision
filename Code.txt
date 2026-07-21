@@ -1,0 +1,92 @@
+终端1
+1进入vllm工具的虚拟环境（所在文件夹/prj/vllm/.venv/）（
+source ~/prj/vllm/.venv/bin/activate
+2启动AI（自己训练的）內存佔用0.6 +量化 +
+vllm serve "/home/inet/model/models/source/Qwen/Qwen2___5-14B-Instruct" \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --gpu-memory-utilization 0.8 \
+  --quantization bitsandbytes \
+  --load-format bitsandbytes \
+  --enable-lora \
+  --max-lora-rank 64 \
+  --lora-modules "Qwen2___5-14B-Instruct=/opt/Wireless_Embodied_AI/LLaMA-Factory/saves/Qwen2.5-14B-Instruct/lora/train_2026-01-31-15-55-22" \
+  --served-model-name "Qwen-Agent" \
+  --max-model-len 4096 \
+  --enforce-eager
+终端2
+3语音启动  （需要等待3分钟）
+python -m ui.whisper_server
+
+终端3
+4界面一键启动
+./run_fusion_custom.sh
+
+
+干扰情况
+run_llm_interference_demo.sh
+
+
+
+
+专门下载杂七杂八的虚拟环境（所在文件夹/下载/temp_env）
+source ~/下载/temp_env/bin/activate
+
+专门微调训练大模型的虚拟环境(所在文件夹 /opt/Wireless_Embodied_AI/)
+cd /opt/Wireless_Embodied_AI/LLaMA-Factory
+source /opt/Wireless_Embodied_AI/train_env/bin/activate
+启动训练大模型LLAMA工厂（上面的部分是为了去除VPN的干扰）
+export http_proxy="" https_proxy="" all_proxy="" HTTP_PROXY="" HTTPS_PROXY="" ALL_PROXY=""
+llamafactory-cli webui
+外场测试接入虚拟局域网(UBT开关),链路已打通
+sudo tailscale up
+sudo tailscale down
+
+
+ python环境激活（在Pycharm的终端下）
+ source venv/bin/activate
+ source /opt/Wireless_Embodied_AI/.venv/bin/activate
+
+
+（bash）启动NS-3网络仿真器conda  +  Base环境进入ns3环境
+source ~/.bashrc
+conda activate ns3
+cd ~/ns3/ns-3-allinone/ns-3.46.1
+
+启动AI（别人量化过的）尽量别用
+vllm serve "/home/inet/model/models/source/Qwen/Qwen2___5-14B-Instruct" --host 0.0.0.0 --port 8000 --gpu-memory-utilization 0.6 --served-model-name "Qwen2___5-14B-Instruct"
+
+方形
+python -m simulation.main --mode demo --source demo --scene-km 4 --intercept-mode hybrid --ui-style rect --fullscreen
+
+redis导出数据
+python -m perception.friendlies_to_redis --source demo --scene-km 4 --intercept-mode hybrid --publish-interval 0.03 --loop --redis-host 127.0.0.1 --redis-port 6379 --redis-db 0
+
+
+
+数据库
+a = redis.Redis(host='192.166.51.21', port=6379, db=0, decode_responses=True)（地面站 station 的库）
+print("远程Redis连接测试：", a.ping())
+
+
+
+
+
+启动大模型 (在 Docker 中)(老的，第三方量化过的。)
+sudo docker run --runtime nvidia --gpus all \
+    -v ~/.cache/huggingface:/root/.cache/huggingface \
+    -p 8000:8000 \
+    --ipc=host \
+    vllm/vllm-openai:latest \
+    --model Qwen/Qwen2.5-14B-Instruct-GPTQ-Int4
+
+连接AI，并与其对话
+curl http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "Qwen3-14B-Int4-W4A16",
+    "messages": [
+      {"role": "user", "content": "你好，现在是几号"}
+    ],
+    "temperature": 0.7,
+    "max_tokens": 300
+  }'
+
